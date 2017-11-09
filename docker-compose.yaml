@@ -1,10 +1,29 @@
 version: '3'
 services:
-  app:
+  server1:
+    container_name: server1
     build: ./app
-    ports:
-      - '8080:3000'
     depends_on:
       - redis
+    environment:
+      - SERVER_NAME=server1
+  server2:
+    container_name: server2
+    build: ./app
+    depends_on:
+      - redis
+    environment:
+      - SERVER_NAME=server2
   redis:
+    container_name: cache
     image: redis
+  nginx:
+    container_name: load-balancer
+    image: nginx
+    depends_on:
+      - server1
+      - server2
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+    - 80:80

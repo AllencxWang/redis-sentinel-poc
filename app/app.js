@@ -5,13 +5,15 @@ var logger = require('morgan');
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
 
-var redis = require('redis');
+// var redis = require('redis');
 // var client = redis.createClient();
 
 var session = require('express-session');
 var RedisStore = require('connect-redis')(session);
 
 var app = express();
+
+var serverName = process.env.SERVER_NAME || 'SERVER';
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -53,7 +55,7 @@ app.get('/main', function(req, res, next) {
   if (!req.session.login) return res.redirect('/login');
   next();
 }, function(req, res, next) {
-  res.render('index', { title: 'Server1' });
+  res.render('index', { title: serverName });
 });
 
 app.get('/login', function(req, res, next) {
