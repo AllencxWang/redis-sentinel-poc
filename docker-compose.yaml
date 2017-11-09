@@ -4,19 +4,34 @@ services:
     container_name: server1
     build: ./app
     depends_on:
-      - redis
+      - redis-master
     environment:
       - SERVER_NAME=server1
   server2:
     container_name: server2
     build: ./app
     depends_on:
-      - redis
+      - redis-master
     environment:
       - SERVER_NAME=server2
-  redis:
-    container_name: cache
+  redis-master:
+    container_name: redis-master
     image: redis
+  redis-slave:
+    container_name: redis-slave
+    image: redis
+    command: redis-server --slaveof redis-master 6379
+    depends_on:
+      - redis-master
+  redis-sentinel:
+    container_name: redis-sentinel
+    image: redis
+    depends_on:
+      - redis-slave
+    volumes:
+      - ./redis-sentinel.conf:/etc/nginx/sentinel.conf:rw
+    command: redis-server /etc/nginx/sentinel.conf --sentinel
+    
   nginx:
     container_name: load-balancer
     image: nginx

@@ -4,17 +4,23 @@ var favicon = require('serve-favicon');
 var logger = require('morgan');
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
-
-// var redis = require('redis');
-// var client = redis.createClient();
-
+var Redis = require('ioredis');
 var session = require('express-session');
 var RedisStore = require('connect-redis')(session);
 
 var app = express();
 
 var serverName = process.env.SERVER_NAME || 'SERVER';
-
+var store = new RedisStore({
+  // host: 'redis-master',
+  // port: 6379,
+  // client: new Redis(6379, 'redis-master'),
+  client: new Redis({
+    sentinels: [{ host: 'redis-sentinel', port: 26379 }],
+    name: 'mymaster'
+  }),
+  ttl: 260
+});
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
@@ -27,16 +33,16 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 app.use(session({
-  store: new RedisStore({
-    host: 'redis',
-    port: 6379,
-    // client: client,
-    ttl: 260
-  }),
+  store: store,
   secret: 'password',
   resave: false,
   saveUninitialized: true,
 }));
+
+// store.client.on('error', function(err){
+//   console.log("Redis error " + err);
+//   store.client = new Redis(6379, 'redis-slave');
+// });
 
 // app.use(session({
 //   secret: 'keyboard cat',
