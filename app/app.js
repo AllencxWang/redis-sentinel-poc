@@ -16,7 +16,7 @@ var store = new RedisStore({
   // port: 6379,
   // client: new Redis(6379, 'redis-master'),
   client: new Redis({
-    sentinels: [{ host: 'redis-sentinel', port: 26379 }],
+    sentinels: [{ host: 'redis-sentinel-1', port: 26379 }],
     name: 'mymaster'
   }),
   ttl: 260
