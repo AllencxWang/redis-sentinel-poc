@@ -12,13 +12,14 @@ var app = express();
 
 var serverName = process.env.SERVER_NAME || 'SERVER';
 var store = new RedisStore({
-  // host: 'redis-master',
+  // host: 'localhost',
   // port: 6379,
   // client: new Redis(6379, 'redis-master'),
   client: new Redis({
-    sentinels: [{ host: 'redis-sentinel-1', port: 26379 }],
+    sentinels: [{ host: 'redis-sentinel', port: 26379 }],
     name: 'mymaster'
   }),
+  // client: new Redis(),
   ttl: 260
 });
 // view engine setup
@@ -61,7 +62,18 @@ app.get('/main', function(req, res, next) {
   if (!req.session.login) return res.redirect('/login');
   next();
 }, function(req, res, next) {
-  res.render('index', { title: serverName });
+  store.all(function(err, sessions) {
+    var users = sessions.filter(function(session) {
+      return session.login;
+    }).map(function(session) {
+      return session.user;
+    });
+    res.render('index', { 
+      title: serverName, 
+      user: req.session.user,
+      users: users
+    });
+  })
 });
 
 app.get('/login', function(req, res, next) {
@@ -70,6 +82,7 @@ app.get('/login', function(req, res, next) {
 
 app.post('/login', function(req, res, next) {
   req.session.login = true;
+  req.session.user = req.body.username
   res.redirect('/main');
 });
 

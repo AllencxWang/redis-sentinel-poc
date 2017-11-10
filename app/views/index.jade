@@ -2,7 +2,12 @@ extends layout
 
 block content
   h1= title
-  p Welcome to #{title}
-
+  p Hello #{user}, welcome to #{title}
+  hr
+  p Online User List:
+  ul
+  for name in users
+    li= name
+  hr 
   form(action="/logout", method="get")
     input(type="submit",value="logout")
