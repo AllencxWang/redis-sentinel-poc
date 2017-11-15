@@ -4,7 +4,7 @@ services:
     container_name: server-1
     build: ./app
     depends_on:
-      - redis-sentinel
+      - redis-master
     environment:
       - SERVER_NAME=server-1
 
@@ -12,7 +12,7 @@ services:
     container_name: server-2
     build: ./app
     depends_on:
-      - redis-sentinel
+      - redis-master
     environment:
       - SERVER_NAME=server-2
 
@@ -26,13 +26,6 @@ services:
     command: redis-server --slaveof redis-master 6379
     depends_on:
       - redis-master
-
-  redis-sentinel:
-    container_name: redis-sentinel
-    build: ./redis
-    depends_on:
-      - redis-slave
-    command: redis-server /etc/redis-sentinel.conf --sentinel --port 26379
     
   nginx:
     container_name: load-balancer

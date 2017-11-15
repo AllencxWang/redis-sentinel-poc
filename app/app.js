@@ -11,17 +11,30 @@ var RedisStore = require('connect-redis')(session);
 var app = express();
 
 var serverName = process.env.SERVER_NAME || 'SERVER';
+
+var master = new Redis(6379, 'redis-master'); 
 var store = new RedisStore({
-  // host: 'localhost',
-  // port: 6379,
-  // client: new Redis(6379, 'redis-master'),
-  client: new Redis({
-    sentinels: [{ host: 'redis-sentinel', port: 26379 }],
-    name: 'mymaster'
-  }),
-  // client: new Redis(),
+  client: master,
   ttl: 260
 });
+
+var middleware = session({
+  store: store,
+  secret: 'password',
+  resave: false,
+  saveUninitialized: true,
+});
+
+master.once('error', function(err) {
+  var slave = new Redis(6379, 'redis-slave')
+  slave.slaveof('NO','ONE', function() {
+    store = new RedisStore({
+      client: slave,
+      ttl: 260
+    });
+  });
+});
+
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
@@ -33,23 +46,21 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 
-app.use(session({
-  store: store,
-  secret: 'password',
-  resave: false,
-  saveUninitialized: true,
-}));
+app.use(middleware)
 
-// store.client.on('error', function(err){
-//   console.log("Redis error " + err);
-//   store.client = new Redis(6379, 'redis-slave');
-// });
-
-// app.use(session({
-//   secret: 'keyboard cat',
-//   resave: false,
-//   saveUninitialized: true,
-// }));
+app.use(function (req, res, next) {
+  if (!req.session) {
+    middleware = session({
+      store: store,
+      secret: 'password',
+      resave: false,
+      saveUninitialized: true,
+    });
+    middleware(req, res, next);  
+  } else {
+    next();
+  }
+})
 
 app.use(express.static(path.join(__dirname, 'public')));
 
