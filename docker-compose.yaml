@@ -2,7 +2,10 @@ version: '3'
 services:
   server-1:
     container_name: server-1
-    build: ./app
+    image: node:alpine
+    volumes:
+      - /Users/allen/redis-sentinel-poc/app:/var/app
+    command: node /var/app/bin/www
     depends_on:
       - redis-node-1
       - redis-node-2
@@ -11,7 +14,10 @@ services:
 
   server-2:
     container_name: server-2
-    build: ./app
+    image: node:alpine
+    volumes:
+      - /Users/allen/redis-sentinel-poc/app:/var/app
+    command: node /var/app/bin/www
     depends_on:
       - redis-node-1
       - redis-node-2

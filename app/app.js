@@ -8,6 +8,8 @@ var Redis = require('ioredis');
 var session = require('express-session');
 var RedisStore = require('connect-redis')(session);
 var failover = require('./failover');
+var ExpressBrute = require('express-brute');
+var RedisBruteStore = require('express-brute-redis');
 
 var app = express();
 
@@ -33,6 +35,15 @@ failover.init([node1, node2]).then(() => {
     client: failover.currentMaster(),
     ttl: 260
   });
+  let bruteStore = new RedisBruteStore({
+    client: failover.currentMaster(),
+    ttl: 260
+  });
+  let bruteforce = new ExpressBrute(bruteStore, {
+    freeRetries: 3,
+    minWait: 5*60*1000, // 5 minutes 
+    maxWait: 60*60*1000, // 1 hour
+  });
   // console.log('CURRENT MASTER===', failover.currentMaster())
   // view engine setup
   app.set('views', path.join(__dirname, 'views'));
@@ -45,28 +56,46 @@ failover.init([node1, node2]).then(() => {
   app.use(bodyParser.urlencoded({ extended: false }));
   app.use(cookieParser());
 
-  // let middleware = session({
-  //   store: store,
-  //   secret: 'password',
-  //   resave: false,
-  //   saveUninitialized: true,
-  // });
+  let middleware = session({
+    store: store,
+    secret: 'password',
+    resave: false,
+    saveUninitialized: true,
+  });
 
-  // app.use(middleware);
+  app.use(middleware);
 
   app.use(function (req, res, next) {
     if (!req.session) {
-      // console.log('session failed----------!!!')
-      store = new RedisStore({
-        client: failover.currentMaster(),
-        ttl: 260
+      app._router.stack.forEach((route, i) => {
+        if (route.handle.name === 'session') {
+          store = new RedisStore({
+            client: failover.currentMaster(),
+            ttl: 260
+          });
+          middleware = session({
+            store: store,
+            secret: 'password',
+            resave: false,
+            saveUninitialized: true,
+          });
+          route.handle = middleware;
+          middleware(req, res, next);
+        }
+        if (route.route && route.route.path && 
+          route.route.methods.post && route.route.path === '/login') {
+          bruteStore = new RedisBruteStore({
+            client: failover.currentMaster(),
+            ttl: 260
+          });
+          bruteforce = new ExpressBrute(bruteStore, {
+            freeRetries: 3,
+            minWait: 5*60*1000, // 5 minutes 
+            maxWait: 60*60*1000, // 1 hour
+          });
+          route.route.stack[0].handle = bruteforce.prevent;
+        }
       });
-      session({
-        store: store,
-        secret: 'password',
-        resave: false,
-        saveUninitialized: true,
-      })(req, res, next);
     } else {
       next() // otherwise continue  
     }
@@ -100,11 +129,22 @@ failover.init([node1, node2]).then(() => {
   app.get('/login', function(req, res, next) {
     res.render('login');
   });
+  
+  // app.post('/auth',
+  //   bruteforce.prevent, // error 403 if we hit this route too often
+  //   function (req, res, next) {
+  //     res.send('Success!');
+  //   }
+  // );
 
-  app.post('/login', function(req, res, next) {
-    req.session.login = true;
-    req.session.user = req.body.username
-    res.redirect('/main');
+  app.post('/login', bruteforce.prevent, function(req, res, next) {
+    if (req.body.password === 'test') {
+      req.session.login = true;
+      req.session.user = req.body.username
+      res.redirect('/main');
+    } else {
+      res.redirect('/login');
+    }
   });
 
   app.get('/logout', function(req, res, next) {
@@ -129,6 +169,13 @@ failover.init([node1, node2]).then(() => {
     res.status(err.status || 500);
     res.render('error');
   });
+  // console.log('ROUTES:', app._router.stack)
+  // app._router.stack.forEach((route, i) => {
+  //   if (route.route && route.route.path && route.route.path === '/login') {
+  //     console.log('STACK===', route.route.stack)
+  //     console.log('METHODS===', route.route.methods)
+  //   }
+  // });
 }).catch((err) => {
   console.log('error occurs : ', err);
 });

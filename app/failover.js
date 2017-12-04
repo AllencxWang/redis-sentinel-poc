@@ -1,7 +1,10 @@
+'use strict';
+
 const Redis = require('ioredis');
 const EventEmitter = require('events');
 
 const KEY = 'MASTER_OPTION';
+
 
 const swichRoleToMaster = (client) => {
   return new Promise((resolve, reject) => {
@@ -24,9 +27,15 @@ const swichRoleToSlave = (client, master = {host: 'localhost', port: 6379}) => {
 };
 
 
-const failOver = new EventEmitter();
+const failover = new EventEmitter();
 
-failOver.init = function(options) {
+failover.events = {
+  INITED: 'INITED',
+  INIT_ERR: 'INIT_ERR',
+  STARTED: 'STARTED',
+};
+
+failover.init = function(options) {
   let lastReadyNode = null;
   this.nodes = options.map((option, index) => {
     const label = option.label || `redis-node-${index+1}`;
@@ -92,12 +101,23 @@ failOver.init = function(options) {
             }));
           }
         });
-      Promise.all(promises).then(resolve).catch(reject);
-    }).catch(reject);
+      Promise.all(promises)
+        .then(() => {
+          this.emit(this.events.INITED);
+          resolve();
+        })
+        .catch((err) => {
+          this.emit(this.events.INIT_ERR, err);
+          reject();
+        });
+    }).catch((err) => {
+      this.emit(this.events.INIT_ERR, err);
+      reject();
+    });
   });
 };
 
-failOver.start = function() {
+failover.start = function() {
   this.nodes.forEach((node) => {
     node.removeListener('error', node.extras.errHandler);
     node.on('error', (err) => {
@@ -157,9 +177,11 @@ failOver.start = function() {
     });
   });
   console.log('failover mechanism has been applied!!!');
+  this.emit(this.events.STARTED);
+  return Promise.resolve();
 };
 
-failOver.currentMaster = function() {
+failover.currentMaster = function() {
   for (let node of this.nodes) {
     if (node.extras.isMaster) {
       return node;
@@ -167,4 +189,4 @@ failOver.currentMaster = function() {
   }
 };
 
-module.exports = failOver;
+module.exports = failover;
