@@ -29,77 +29,15 @@ const node2 = {
   retry: 1000
 };
 
-failover.init([node1, node2]).then(() => {
-  failover.start();
-  let store = new RedisStore({
-    client: failover.currentMaster(),
-    ttl: 260
-  });
-  let bruteStore = new RedisBruteStore({
-    client: failover.currentMaster(),
-    ttl: 260
-  });
-  let bruteforce = new ExpressBrute(bruteStore, {
-    freeRetries: 3,
-    minWait: 5*60*1000, // 5 minutes 
-    maxWait: 60*60*1000, // 1 hour
-  });
-  // console.log('CURRENT MASTER===', failover.currentMaster())
-  // view engine setup
+failover.start([node1, node2]).then(() => {
+  
   app.set('views', path.join(__dirname, 'views'));
   app.set('view engine', 'jade');
-
-  // uncomment after placing your favicon in /public
-  //app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
-  //app.use(logger('dev'));
-  app.use(bodyParser.json());
   app.use(bodyParser.urlencoded({ extended: false }));
   app.use(cookieParser());
+  app.use(failover.startSessions());
 
-  let middleware = session({
-    store: store,
-    secret: 'password',
-    resave: false,
-    saveUninitialized: true,
-  });
-
-  app.use(middleware);
-
-  app.use(function (req, res, next) {
-    if (!req.session) {
-      app._router.stack.forEach((route, i) => {
-        if (route.handle.name === 'session') {
-          store = new RedisStore({
-            client: failover.currentMaster(),
-            ttl: 260
-          });
-          middleware = session({
-            store: store,
-            secret: 'password',
-            resave: false,
-            saveUninitialized: true,
-          });
-          route.handle = middleware;
-          middleware(req, res, next);
-        }
-        if (route.route && route.route.path && 
-          route.route.methods.post && route.route.path === '/login') {
-          bruteStore = new RedisBruteStore({
-            client: failover.currentMaster(),
-            ttl: 260
-          });
-          bruteforce = new ExpressBrute(bruteStore, {
-            freeRetries: 3,
-            minWait: 5*60*1000, // 5 minutes 
-            maxWait: 60*60*1000, // 1 hour
-          });
-          route.route.stack[0].handle = bruteforce.prevent;
-        }
-      });
-    } else {
-      next() // otherwise continue  
-    }
-  })
+  app.use(failover.backupSessions());
 
   app.use(express.static(path.join(__dirname, 'public')));
 
@@ -112,7 +50,7 @@ failover.init([node1, node2]).then(() => {
     if (!req.session.login) return res.redirect('/login');
     next();
   }, function(req, res, next) {
-    store.all(function(err, sessions) {
+    failover.sessionStore().all(function(err, sessions) {
       var users = sessions.filter(function(session) {
         return session.login;
       }).map(function(session) {
@@ -137,7 +75,7 @@ failover.init([node1, node2]).then(() => {
   //   }
   // );
 
-  app.post('/login', bruteforce.prevent, function(req, res, next) {
+  app.post('/login', failover.preventBruteForce(), function(req, res, next) {
     if (req.body.password === 'test') {
       req.session.login = true;
       req.session.user = req.body.username
