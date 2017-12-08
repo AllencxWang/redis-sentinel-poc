@@ -37,8 +37,6 @@ failover.start([node1, node2]).then(() => {
   app.use(cookieParser());
   app.use(failover.startSessions());
 
-  app.use(failover.backupSessions());
-
   app.use(express.static(path.join(__dirname, 'public')));
 
 
@@ -50,7 +48,7 @@ failover.start([node1, node2]).then(() => {
     if (!req.session.login) return res.redirect('/login');
     next();
   }, function(req, res, next) {
-    failover.sessionStore().all(function(err, sessions) {
+    failover.store.all(function(err, sessions) {
       var users = sessions.filter(function(session) {
         return session.login;
       }).map(function(session) {

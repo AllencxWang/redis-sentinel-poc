@@ -44,7 +44,7 @@ const swichRoleToMaster = (client) => {
   });
 };
 
-const swichRoleToSlave = (client, master = {host: 'localhost', port: 6379}) => {
+const swichRoleToSlave = (client, master) => {
   return new Promise((resolve, reject) => {
     client.slaveof(master.host, master.port, (err) => {
       if (err) return reject(err);
@@ -63,7 +63,7 @@ const createSessionMiddleware = (option = {}) => {
   return session(option);
 };
 
-const createBruteforceObject = (option = {}) => {
+const createBruteForceObject = (option = {}) => {
   const store = process.env.NODE_ENV === 'mock' ?
     new ExpressBrute.MemoryStore() :
     new RedisBruteStore({
@@ -239,27 +239,24 @@ failover.currentMaster = function() {
 failover.startSessions = function() {
   sessionMiddleware = createSessionMiddleware(sessionOpt);
   return function(req, res, next) {
-    sessionMiddleware(req, res, next);
-  };
-};
-
-failover.backupSessions = function() {
-  return (req, res, next) => {
-    if (!req.session) {
-      failed = true;
-      sessionMiddleware = createSessionMiddleware(sessionOpt);
-      sessionMiddleware(req, res, next);
-    } else {
-      next();
-    }
+    sessionMiddleware(req, res, (err) => {
+      if (err) return next(err);
+      if (!req.session) {
+        failed = true;
+        sessionMiddleware = createSessionMiddleware(sessionOpt);
+        sessionMiddleware(req, res, next);
+      } else {
+        next();
+      }
+    });
   };
 };
 
 failover.preventBruteForce = function() {
-  let bruteForce = createBruteforceObject(bruteForceOpt);
+  let bruteForce = createBruteForceObject(bruteForceOpt);
   return (req, res, next) => {
     if (failed === true) {
-      bruteForce = createBruteforceObject(bruteForceOpt);
+      bruteForce = createBruteForceObject(bruteForceOpt);
       failed = false;
     }
     bruteForce.prevent(req, res, next);
