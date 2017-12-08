@@ -229,6 +229,7 @@ failover.start = function(options) {
 };
 
 failover.currentMaster = function() {
+  if (!this.nodes || !Array.isArray(this.nodes)) return null;
   for (let node of this.nodes) {
     if (node.extras.isMaster) {
       return node;
